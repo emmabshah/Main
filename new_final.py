@@ -42,12 +42,8 @@ load_dotenv("/home/student/freddy/.env")
 
 
 # =============================================================================
-#  SECTION 1: CONFIGURATION FLAGS
+#  SECTION 1: CONFIGURATION FLAG
 # =============================================================================
-
-#Set True to show OpenCV debug windows with tracking overlays.
-#Set False for headless deployment or cleaner demo recordings.
-DEBUG_VIEW = True
 
 # Set True to write per-frame tracking and detection data to CSV files
 # in the logging directory below. Used for generating evaluation graphs.
@@ -1990,13 +1986,12 @@ apply_eye_servos()
 cam_left  = setup_cam(0)
 cam_right = setup_cam(1)
 
-if DEBUG_VIEW:
-    win_left  = "Left Eye"
-    win_right = "Right Eye"
-    cv2.namedWindow(win_left,  cv2.WINDOW_NORMAL)
-    cv2.namedWindow(win_right, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(win_left,  640, 480)
-    cv2.resizeWindow(win_right, 640, 480)
+win_left  = "Left Eye"
+win_right = "Right Eye"
+cv2.namedWindow(win_left,  cv2.WINDOW_NORMAL)
+cv2.namedWindow(win_right, cv2.WINDOW_NORMAL)
+cv2.resizeWindow(win_left,  640, 480)
+cv2.resizeWindow(win_right, 640, 480)
 
 
 # =============================================================================
@@ -2022,10 +2017,9 @@ def animate_while_waiting(cam_left, cam_right, done_event):
         update_blink(now)
         update_wings(now)
 
-        if DEBUG_VIEW:
-            cv2.imshow(win_left,  left_result["frame"])
-            cv2.imshow(win_right, right_result["frame"])
-            cv2.waitKey(1)
+        cv2.imshow(win_left,  left_result["frame"])
+        cv2.imshow(win_right, right_result["frame"])
+        cv2.waitKey(1)
         time.sleep(0.016)
 
 
@@ -2312,31 +2306,30 @@ try:
                     no_face_phrase_timer = now  # restart delay for next phrase
 
         # ── Debug overlay ─────────────────────────────────────────────────
-        if DEBUG_VIEW:
-            disp_left  = left_result["frame"].copy()
-            disp_right = right_result["frame"].copy()
-            draw_eye_debug(disp_left,  left_result,  is_active=is_left_active)
-            draw_eye_debug(disp_right, right_result, is_active=is_right_active)
+        disp_left  = left_result["frame"].copy()
+        disp_right = right_result["frame"].copy()
+        draw_eye_debug(disp_left,  left_result,  is_active=is_left_active)
+        draw_eye_debug(disp_right, right_result, is_active=is_right_active)
 
-            emotion_color = EMOTION_COLORS.get(emotion_label, (200, 200, 200))
-            target_text   = f"target: {target['label']}" if target else "target: none"
-            for img in (disp_left, disp_right):
-                cv2.putText(img,
-                    f"{target_text}  stable: {emotion_label}  detected: {detected_label} ({emotion_conf:.0f}%)",
-                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, emotion_color, 2)
+        emotion_color = EMOTION_COLORS.get(emotion_label, (200, 200, 200))
+        target_text   = f"target: {target['label']}" if target else "target: none"
+        for img in (disp_left, disp_right):
+            cv2.putText(img,
+                f"{target_text}  stable: {emotion_label}  detected: {detected_label} ({emotion_conf:.0f}%)",
+                (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, emotion_color, 2)
 
-            l_pan_ticks = norm_to_ticks(l_pan_norm, L_PAN_CEN, L_PAN_LEFT, L_PAN_RIGHT)
-            r_pan_ticks = norm_to_ticks(r_pan_norm, R_PAN_CEN, R_PAN_LEFT, R_PAN_RIGHT)
-            l_tilt_ticks = norm_to_ticks(world_tilt_norm, L_TILT_CEN, L_TILT_UP, L_TILT_DOWN)
-            cv2.putText(disp_left,
-                f"L pan={int(l_pan_ticks)} lpn={l_pan_norm:.2f} tilt={int(l_tilt_ticks)}",
-                (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            cv2.putText(disp_right,
-                f"R pan={int(r_pan_ticks)} rpn={r_pan_norm:.2f} neck={int(neck_now)}",
-                (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        l_pan_ticks = norm_to_ticks(l_pan_norm, L_PAN_CEN, L_PAN_LEFT, L_PAN_RIGHT)
+        r_pan_ticks = norm_to_ticks(r_pan_norm, R_PAN_CEN, R_PAN_LEFT, R_PAN_RIGHT)
+        l_tilt_ticks = norm_to_ticks(world_tilt_norm, L_TILT_CEN, L_TILT_UP, L_TILT_DOWN)
+        cv2.putText(disp_left,
+            f"L pan={int(l_pan_ticks)} lpn={l_pan_norm:.2f} tilt={int(l_tilt_ticks)}",
+            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(disp_right,
+            f"R pan={int(r_pan_ticks)} rpn={r_pan_norm:.2f} neck={int(neck_now)}",
+            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            cv2.imshow(win_left,  disp_left)
-            cv2.imshow(win_right, disp_right)
+        cv2.imshow(win_left,  disp_left)
+        cv2.imshow(win_right, disp_right)
 
         # ── Blink state machine (emotion-driven) ─────────────────────────
         params = get_emotion_params()
@@ -2346,9 +2339,8 @@ try:
         update_wings(now, params)
 
         # ── Frame pacing ─────────────────────────────────────────────────
-        if DEBUG_VIEW:
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
 
 # =============================================================================
@@ -2360,8 +2352,7 @@ finally:
 
     pixels.fill((0, 0, 0))
     pixels.show()
-    if DEBUG_VIEW:
-        cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
     face_detection.close()
     pca.deinit()
     cam_left.stop()
