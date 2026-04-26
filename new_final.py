@@ -2309,6 +2309,7 @@ try:
                         args=(phrase,), daemon=True,
                     ).start()
                     phrase_last_spoken = now
+                    no_face_phrase_timer = now  # restart delay for next phrase
 
         # ── Debug overlay ─────────────────────────────────────────────────
         if DEBUG_VIEW:
