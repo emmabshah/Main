@@ -153,19 +153,19 @@ pixels = neopixel.NeoPixel(
 
 # LED colour per emotion (R, G, B) — chosen to be visually distinct and
 # intuitively associated with each emotion.
-EMOTION_LED_COLORS = {
-    "happy":    (255, 255,   0),
-    "sad":      (  0, 100, 255),
-    "angry":    (255,   0,   0),
-    "surprise": (255,  20, 147),
-    "fear":     ( 20,   0,  40),
-    "disgust":  (  0, 180,   0),
-    "neutral":  (130,  35,   0),
-    "unknown":  (  0,   0,   0),
+EMOTION_LED_COLOURS = {
+    "happy":    (255, 255,   0),  # yellow
+    "sad":      (  0, 100, 255),  # blue
+    "angry":    (255,   0,   0),  # red
+    "surprise": (255,  20, 147),  # pink
+    "fear":     ( 20,   0,  40),  # purple
+    "disgust":  (  0, 180,   0),  # green
+    "neutral":  (130,  35,   0),  # orange
+    "unknown":  (  0,   0,   0),  # black
 }
 
 # HUD overlay colours (BGR for OpenCV debug windows)
-EMOTION_COLORS = {
+EMOTION_COLOURS = {
     "happy":    (  0, 255, 255),  # yellow
     "sad":      (255, 100,   0),  # blue
     "angry":    (  0,   0, 255),  # red
@@ -234,7 +234,6 @@ AFTER_SPEECH_COUNT = 10
 CAM_EX_SIGN = {"L": -1, "R": -1}
 CAM_EY_SIGN = {"L":  1, "R":  1}
 
-# Eye tracking PID-like gains.
 # A proportional controller is used rather than full PID because the servos
 # have no positional feedback — derivative and integral terms would amplify
 # noise without improving tracking.
@@ -563,7 +562,7 @@ NO_FACE_PHRASES = [
 
 
 # =============================================================================
-#  SECTION 9: SHARED STATE VARIABLES
+#  SECTION 9: SHARED STATE VARIABLES AND STATE MACHINES
 # =============================================================================
 
 # ── Robot mode ───────────────────────────────────────────────────────────────
@@ -701,7 +700,7 @@ PHRASE_COOLDOWN      = 25.0  # minimum seconds between spoken phrases
 no_face_phrase_index = 0     # cycles through NO_FACE_PHRASES in order
 didnt_hear_index     = 0     # cycles through DIDNT_HEAR_PHRASES in order
 no_face_phrase_timer = 0.0
-NO_FACE_PHRASE_DELAY = 8.0   # seconds without a face before Freddy comments
+NO_FACE_PHRASE_DELAY = 10.0   # seconds without a face before Freddy comments
 
 # ── Speaking emotion lock ────────────────────────────────────────────────────
 # When Freddy is speaking an emotion phrase (including the squawk), the
@@ -714,7 +713,7 @@ speaking_emotion_lock = threading.Lock()
 
 
 # =============================================================================
-#  SECTION 10: CSV LOGGING
+#  SECTION 10: TESTING CSV LOGGING
 # =============================================================================
 
 # When LOGGING_ENABLED is True, per-frame data is written to CSV files for
@@ -740,8 +739,6 @@ def init_logging():
     print("\n" + "="*50)
     print("  LOGGING ENABLED — Test Condition Setup")
     print("="*50)
-    print("  Examples: bright_room, dim_room, happy_face,")
-    print("  moving_slow, no_face, wake_word_quiet")
     try:
         condition = input("  Enter test condition label: ").strip().lower()
     except EOFError:
@@ -792,7 +789,8 @@ def log_tracking(target, now):
         return
     writer = csv.writer(tracking_log)
     if target is not None:
-        err_dist = math.sqrt(target["ex"] ** 2 + target["ey"] ** 2)
+        # Use Pythagoras' Theorem to find 2D error
+        err_dist = math.sqrt(target["ex"] ** 2 + target["ey"] ** 2)     
         diag = math.sqrt(target["w"] ** 2 + target["h"] ** 2)
         norm_err = err_dist / diag if diag > 0 else 0.0
         writer.writerow([
@@ -842,6 +840,8 @@ def log_transcription(audio_dur, transcribe_dur, transcript):
     if not LOGGING_ENABLED or transcribe_log is None:
         return
     writer = csv.writer(transcribe_log)
+    # Real-time factor (rtf) if < 1, transcription was faster than audio duration
+    # I > 1, transcription took longer than real time
     rtf = transcribe_dur / audio_dur if audio_dur > 0 else 0.0
     writer.writerow([
         f"{time.time():.4f}", test_condition, f"{audio_dur:.2f}",
@@ -862,7 +862,7 @@ def close_logs():
 
 
 # =============================================================================
-#  SECTION 11: HELPER FUNCTIONS — SERVOS & NORMALISATION
+#  SECTION 11: HELPER FUNCTIONS — SERVOS & SERVO NORMALISATION
 # =============================================================================
 
 # Lock to prevent concurrent I2C writes from different threads
@@ -1002,7 +1002,7 @@ def pick_best_detection(detections, last_pos=None):
     largest_area = 0.0
 
     for det in detections:
-        bbox = det.location_data.relative_bounding_box
+        bbox = det.location_data.relative_bounding_box      # Face bounding box
         area = bbox.width * bbox.height
         det_cx = bbox.xmin + bbox.width / 2
         det_cy = bbox.ymin + bbox.height / 2
@@ -1116,9 +1116,7 @@ def update_tracking(target, apply_tilt_limit=True):
     """Update eye pan/tilt and neck position from a face detection target.
 
     This is the core tracking controller, used identically in emotion mode,
-    parrot-transcription animation, and parrot-speech animation.  Extracting
-    it into a single function eliminates the duplicated tracking logic that
-    previously appeared in three places.
+    parrot-transcription animation, and parrot-speech animation. 
 
     Args:
         target: detection result dict from choose_active_target(), or None.
@@ -1185,8 +1183,7 @@ def update_blink(now, params=None, rest_position=0.35):
 
     In emotion mode, params comes from get_emotion_params() and rest_position
     is controlled by e_rest.  In parrot mode, defaults are used for a neutral
-    blink.  This replaces the three near-identical copies of blink logic
-    that previously existed in the main loop.
+    blink. 
 
     Args:
         now:           current time.time() value.
@@ -1295,13 +1292,13 @@ def update_wings(now, params=None):
 #  SECTION 15: HELPER FUNCTIONS — DEBUG OVERLAY
 # =============================================================================
 
-def draw_crosshair(img, cx, cy, cross_len=12, gap=3, thick=2, color=(255, 255, 255)):
+def draw_crosshair(img, cx, cy, cross_len=12, gap=3, thick=2, colour=(255, 255, 255)):
     """Draw a crosshair marker at the given position."""
-    cv2.line(img, (cx - cross_len, cy), (cx - gap, cy), color, thick)
-    cv2.line(img, (cx + gap, cy), (cx + cross_len, cy), color, thick)
-    cv2.line(img, (cx, cy - cross_len), (cx, cy - gap), color, thick)
-    cv2.line(img, (cx, cy + gap), (cx, cy + cross_len), color, thick)
-    cv2.circle(img, (cx, cy), 2, color, -1)
+    cv2.line(img, (cx - cross_len, cy), (cx - gap, cy), colour, thick)
+    cv2.line(img, (cx + gap, cy), (cx + cross_len, cy), colour, thick)
+    cv2.line(img, (cx, cy - cross_len), (cx, cy - gap), colour, thick)
+    cv2.line(img, (cx, cy + gap), (cx, cy + cross_len), colour, thick)
+    cv2.circle(img, (cx, cy), 2, colour, -1)
 
 
 def draw_eye_debug(img, result, is_active=False):
@@ -1711,7 +1708,7 @@ def get_random_after_squawk():
 
 def update_belly_leds(emotion):
     """Set all belly LEDs to the colour for the given emotion."""
-    colour = EMOTION_LED_COLORS.get(emotion, (0, 0, 0))
+    colour = EMOTION_LED_COLOURS.get(emotion, (0, 0, 0))
     pixels.fill(colour)
     pixels.show()
 
@@ -2311,12 +2308,12 @@ try:
         draw_eye_debug(disp_left,  left_result,  is_active=is_left_active)
         draw_eye_debug(disp_right, right_result, is_active=is_right_active)
 
-        emotion_color = EMOTION_COLORS.get(emotion_label, (200, 200, 200))
+        emotion_colour = EMOTION_COLOURS.get(emotion_label, (200, 200, 200))
         target_text   = f"target: {target['label']}" if target else "target: none"
         for img in (disp_left, disp_right):
             cv2.putText(img,
                 f"{target_text}  stable: {emotion_label}  detected: {detected_label} ({emotion_conf:.0f}%)",
-                (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, emotion_color, 2)
+                (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, emotion_colour, 2)
 
         l_pan_ticks = norm_to_ticks(l_pan_norm, L_PAN_CEN, L_PAN_LEFT, L_PAN_RIGHT)
         r_pan_ticks = norm_to_ticks(r_pan_norm, R_PAN_CEN, R_PAN_LEFT, R_PAN_RIGHT)
