@@ -1485,8 +1485,7 @@ def next_blink_time():
 
 def cancel_all_speech():
     """Increment the speech generation counter, kill any playing audio,
-    and release the display emotion lock.  Any in-flight playback will
-    see its generation no longer matches and stop itself."""
+    and release the display emotion lock.  Safety mechanism for wake-word detection."""
     global speech_generation, speaking_emotion
     with speech_cancel_lock:
         speech_generation += 1
@@ -2342,6 +2341,13 @@ try:
 #  SECTION 25: CLEANUP
 # =============================================================================
 finally:
+  # Delete the latest temporary voice recording when the program stops
+  try:
+      if os.path.exists(OUTPUT_WAV):
+          os.remove(OUTPUT_WAV)
+          print("Deleted temporary command.wav during cleanup.")
+  except Exception as e:
+      print(f"Could not delete command.wav during cleanup: {e}")
     # Stop any in-progress audio playback before releasing hardware
     stop_current_playback()
 
