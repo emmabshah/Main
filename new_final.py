@@ -1789,6 +1789,12 @@ def transcribe_whisper(filename):
     print("Transcribing...")
     t_start = time.time()
     try:
+        """WHISPER_CLI: path to the whisper.cpp executable
+          -m: selected Whisper model file
+          --translate:	translated/ transcribed output into English
+          -t: number of processing threads
+          -f: input audio file"""
+      
         result = subprocess.run(
             [WHISPER_CLI, "-m", WHISPER_MODEL,
              "--translate", "-t", WHISPER_THREADS, "-f", filename],
@@ -1818,7 +1824,8 @@ def transcribe_whisper(filename):
 
 
 def parrot_text(text):
-    """Clean up text for parrot repetition (strip trailing commas/whitespace)."""
+    """Clean up text for parrot repetition (strip trailing commas/whitespace).
+    Acts as a final clean-up."""
     text = text.strip().rstrip(",")
     if not text:
         return "What did you say"
@@ -1893,7 +1900,7 @@ def audio_listener():
 
     Pauses itself when:
       - audio_listener_paused is True (during Freddy's own speech)
-      - Robot is not in emotion mode (prevents mic contention with recording)
+      - Robot is not in emotion mode (prevents mic conflict with recording)
       - Audio is currently playing (prevents self-triggering)
       - Within the post-speech cooldown window (prevents echo trigger)
 
