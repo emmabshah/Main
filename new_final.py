@@ -1134,7 +1134,7 @@ def update_tracking(target, apply_tilt_limit=True):
     # ── Tilt (vertical, shared between both eyes) ─────────────────────────
     if abs(ey) > DEADZONE_TILT:
         corrected_ey = ey * CAM_EY_SIGN[target["label"]]
-        delta_tilt   = Kp_EYE * (corrected_ey / (h / 2))
+        delta_tilt   = Kp_EYE * (corrected_ey / (h / 2))     # Half so pixel error is -1 to 1
         delta_tilt   = max(-MAX_STEP_EYE, min(MAX_STEP_EYE, delta_tilt))
         if abs(delta_tilt) > MIN_STEP_EYE:
             if apply_tilt_limit:
@@ -1146,11 +1146,11 @@ def update_tracking(target, apply_tilt_limit=True):
     # ── Pan (horizontal, each eye independent) ────────────────────────────
     if abs(ex) > DEADZONE_PAN:
         corrected_ex = ex * CAM_EX_SIGN[target["label"]]
-        delta_pan    = Kp_EYE * (corrected_ex / (w / 2))
+        delta_pan    = Kp_EYE * (corrected_ex / (w / 2))    # Half so pixel error is -1 to 1
         delta_pan    = max(-MAX_STEP_EYE, min(MAX_STEP_EYE, delta_pan))
         if abs(delta_pan) > MIN_STEP_EYE:
             if target["label"] == "L":
-                l_pan_norm = max(-1.0, min(1.0, l_pan_norm + delta_pan))
+                l_pan_norm = max(-1.0, min(1.0, l_pan_norm + delta_pan))   # Decay to centre 
             else:
                 r_pan_norm = max(-1.0, min(1.0, r_pan_norm + delta_pan))
 
@@ -1551,11 +1551,9 @@ def animate_beak_for_wav(path, expected_gen=None):
     a background thread while the main thread drives the servo.
 
     The beak position is smoothed with a simple exponential filter
-    (current += 0.4 * (target - current)) to avoid jarring jumps.
+    (current += 0.4 * (target - current)) to avoid large jumps.
 
-    This function is used for both squawk playback and TTS speech — it
-    replaced the previous separate play_wav_with_beak and speak_with_beak
-    beak-animation sections which were near-identical.
+    This function is used for both squawk playback and TTS speech
 
     Args:
         path:         path to the WAV file to play.
