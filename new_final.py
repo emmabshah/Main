@@ -1115,13 +1115,13 @@ def crop_face(frame, bbox, h, w, pad=FACE_PAD):
 def update_tracking(target, apply_tilt_limit=True):
     """Update eye pan/tilt and neck position from a face detection target.
 
-    This is the core tracking controller, used identically in emotion mode,
+    This is the core tracking controller, used identically in robot mode,
     parrot-transcription animation, and parrot-speech animation. 
 
     Args:
         target: detection result dict from choose_active_target(), or None.
         apply_tilt_limit: if True, vertical range is capped by the current
-                          emotion's tilt_limit parameter (emotion mode only).
+                          emotion's tilt_limit parameter (robot mode only).
     """
     global l_pan_norm, r_pan_norm, world_tilt_norm, neck_now
 
@@ -1181,7 +1181,7 @@ def update_tracking(target, apply_tilt_limit=True):
 def update_blink(now, params=None, rest_position=0.35):
     """Advance the blink state machine by one frame.
 
-    In emotion mode, params comes from get_emotion_params() and rest_position
+    In robot mode, params comes from get_emotion_params() and rest_position
     is controlled by e_rest.  In parrot mode, defaults are used for a neutral
     blink. 
 
@@ -1197,7 +1197,7 @@ def update_blink(now, params=None, rest_position=0.35):
     e_hold  = params["e_hold"]  if params else 0.07
 
     if blink_state == BLINK_IDLE:
-        # In emotion mode, smoothly drift toward the emotion's rest position
+        # In robot mode, smoothly drift toward the emotion's rest position
         if params is not None:
             target_rest = params["e_rest"]
             if abs(eyelid_norm - target_rest) > 0.005:
@@ -1241,7 +1241,7 @@ def update_blink(now, params=None, rest_position=0.35):
 def update_wings(now, params=None):
     """Advance the wing state machine by one frame.
 
-    In emotion mode, params provides emotion-specific wing behaviour.
+    In robot mode, params provides emotion-specific wing behaviour.
     In parrot mode (params=None), uses gentle default flutter values.
     This replaces the three near-identical copies of wing logic.
 
@@ -1900,7 +1900,7 @@ def audio_listener():
 
     Pauses itself when:
       - audio_listener_paused is True (during Freddy's own speech)
-      - Robot is not in emotion mode (prevents mic conflict with recording)
+      - Robot is not in robot mode (prevents mic conflict with recording)
       - Audio is currently playing (prevents self-triggering)
       - Within the post-speech cooldown window (prevents echo trigger)
 
@@ -1919,7 +1919,7 @@ def audio_listener():
             with mode_lock:
                 current_mode = robot_mode
 
-            # Don't read from the mic at all if paused or not in emotion mode
+            # Don't read from the mic at all if paused or not in robot mode
             if paused or current_mode != MODE_EMOTION:
                 time.sleep(0.01)
                 continue
@@ -2002,9 +2002,6 @@ cv2.resizeWindow(win_right, 640, 480)
 def animate_while_waiting(cam_left, cam_right, done_event):
     """Run face tracking, blinking, and wing flutter while waiting for a
     background task (e.g. transcription) to complete.
-
-    This replaces the large inline animation loops that were previously
-    duplicated in the parrot-transcription and parrot-speech sections.
 
     Args:
         cam_left, cam_right: Picamera2 instances.
@@ -2103,7 +2100,7 @@ try:
                 threading.Thread(target=parrot_speech_thread, daemon=True).start()
                 animate_while_waiting(cam_left, cam_right, parrot_speech_done)
 
-            # ── Return to emotion mode ────────────────────────────────────
+            # ── Return to robot mode ────────────────────────────────────
             with mode_lock:
                 robot_mode = MODE_EMOTION
             with speaking_emotion_lock:
@@ -2121,7 +2118,7 @@ try:
             continue
 
         # ─────────────────────────────────────────────────────────────────
-        #  EMOTION MODE: Normal face tracking + emotion detection
+        #  ROBOT MODE: Normal face tracking + emotion detection
         # ─────────────────────────────────────────────────────────────────
         now = time.time()
 
@@ -2251,7 +2248,7 @@ try:
                             speaking_emotion = None
                         with speech_finished_lock:
                             speech_finished_at = time.time()
-                        # Only unpause listener if still in emotion mode —
+                        # Only unpause listener if still in robot mode —
                         # prevents a cancelled thread from restoring state
                         # after a mode switch.
                         with mode_lock:
