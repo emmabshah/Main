@@ -2,10 +2,10 @@
 Freddy — Main Control Script
 ================================================
 An animatronic parrot robot with:
-  - Dual-camera face tracking (eyes + neck)
+  - Dual-camera face tracking (eyes & neck move)
   - Facial emotion detection with reactive behaviours
-  - Wake-word ("Hey Freddy") triggered parrot/repeat mode
-  - Text-to-speech with beak animation
+  - Wake-word ("Hey Freddy") triggered Parrot Mode
+  - TTS with beak animation
   - Emotion-driven eyelid, wing, and LED behaviours
   - Scanning idle behaviour when no face is present
 """
@@ -37,7 +37,7 @@ import os
 from better_profanity import profanity
 from dotenv import load_dotenv
 
-# Load environment variables from .env file (keeps secrets out of source code)
+# Load environment variables from .env file
 load_dotenv("/home/student/freddy/.env")
 
 
@@ -46,13 +46,12 @@ load_dotenv("/home/student/freddy/.env")
 # =============================================================================
 
 # Set True to write per-frame tracking and detection data to CSV files
-# in the logging directory below. Used for generating evaluation graphs.
+# in the logging directory. 
 # When enabled, the script will prompt for a test condition label at
-# startup (e.g. "bright_room", "happy_face", "wake_word_quiet").
-# This label is included in every CSV row so you can filter by condition
-# in Excel when generating graphs.
-LOGGING_ENABLED = False
+# startup
 #LOGGING_ENABLED = True
+LOGGING_ENABLED = False
+
 LOG_DIR = "/home/student/freddy/logs"
 
 
@@ -62,7 +61,7 @@ LOG_DIR = "/home/student/freddy/logs"
 
 # ── MediaPipe face detection ─────────────────────────────────────────────────
 # model_selection=0 selects the short-range model (faces within ~2 m),
-# which suits Freddy's typical interaction distance.
+# which suits Freddy's typical interaction distance for audio detection.
 mp_face = mp.solutions.face_detection
 mp_draw = mp.solutions.drawing_utils
 face_detection = mp_face.FaceDetection(
@@ -70,7 +69,7 @@ face_detection = mp_face.FaceDetection(
 )
 
 # ── PCA9685 servo driver ─────────────────────────────────────────────────────
-# reference_clock_speed is tuned for this specific board to get accurate 50 Hz.
+# Details from Arduino servo starter code
 i2c = busio.I2C(board.SCL, board.SDA)
 pca = PCA9685(i2c)
 pca.reference_clock_speed = 27_000_000
@@ -164,7 +163,7 @@ EMOTION_LED_COLOURS = {
     "unknown":  (  0,   0,   0),  # black
 }
 
-# HUD overlay colours (BGR for OpenCV debug windows)
+# Debug overlay colours (BGR for OpenCV)
 EMOTION_COLOURS = {
     "happy":    (  0, 255, 255),  # yellow
     "sad":      (255, 100,   0),  # blue
@@ -182,40 +181,39 @@ EMOTION_COLOURS = {
 # =============================================================================
 
 # ── Porcupine wake word ──────────────────────────────────────────────────────
-# Access key loaded from environment variable to avoid committing secrets.
+# Access key loaded from environment variable to avoid sharing sensitive information.
 ACCESS_KEY   = os.getenv("PORCUPINE_ACCESS_KEY", "")
 KEYWORD_PATH = "/home/student/freddy/hey_freddy.ppn"
 
 # ── Recording settings ───────────────────────────────────────────────────────
 FORMAT         = pyaudio.paInt16
 CHANNELS       = 1
-LISTEN_SECONDS = 5.0            # how long Freddy listens after wake word
+# How long Freddy listens after wake-word detection
+LISTEN_SECONDS = 5.0            
 OUTPUT_WAV     = "/home/student/freddy/command.wav"
 
-# ── Whisper speech-to-text ───────────────────────────────────────────────────
-# Using whisper.cpp (C++ port) for fast on-device inference.
+# ── Whisper STT ───────────────────────────────────────────────────
+# Using whisper.cpp for fast on-device inference.
 # The --translate flag makes Whisper output English regardless of input language.
-# The 'base' model was chosen as the best trade-off between accuracy and speed
-# on the Raspberry Pi 5 — the 'tiny' model was tested but produced noticeably
-# worse translation quality (see evaluation chapter).
+# The 'base' model was chosen as the best trade-off between accuracy and speed.
 WHISPER_CLI     = "/home/student/freddy/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODEL   = "/home/student/freddy/whisper.cpp/models/ggml-base.bin"
 WHISPER_THREADS = "4"
 
-# ── Piper text-to-speech ────────────────────────────────────────────────────
+# ── Piper TTS────────────────────────────────────────────────────
 # Custom parrot voice trained with TextyMcSpeechy on Chatterbox-generated
-# training data, using an ElevenLabs voice clone as the source timbre.
+# training data, using an ElevenLabs voice.
 PIPER_EXE          = "/home/student/freddy/piper/piper"
 PIPER_VOICE_DIR    = "/home/student/new_tts_voices/parrot_4734"
 PIPER_MODEL        = os.path.join(PIPER_VOICE_DIR, "en_GB-parrot_4734-medium.onnx")
-PIPER_LENGTH_SCALE = "0.85"    # slightly faster than default speech rate
-PIPER_NOISE_SCALE  = "0.2"     # low variability for consistent character voice
+PIPER_LENGTH_SCALE = "0.85"    # Slightly faster than default speech rate
+PIPER_NOISE_SCALE  = "0.2"     # Low variability for consistent character voice
 PIPER_NOISE_W      = "0.5"
 TTS_WAV            = "/tmp/parrot_tts.wav"
 
 # ── Squawk audio files ──────────────────────────────────────────────────────
 # Pre-recorded squawk WAVs generated with ElevenLabs, one set per emotion
-# and a generic set for after parrot-mode speech.
+# and a generic set for after Parrot Mode speech.
 EMOTION_SQUAWK_DIR = "/home/student/freddy/Emotion Detection Squawks"
 AFTER_SPEECH_DIR   = "/home/student/freddy/After Speech Squawks"
 EMOTION_SQUAWK_COUNTS = {
@@ -230,20 +228,19 @@ AFTER_SPEECH_COUNT = 10
 # =============================================================================
 
 # Per-camera axis sign corrections.
-# Flips the error direction if a camera is mounted mirrored/inverted.
+# Flips the error direction to account for camera mounting position.
 CAM_EX_SIGN = {"L": -1, "R": -1}
 CAM_EY_SIGN = {"L":  1, "R":  1}
 
 # A proportional controller is used rather than full PID because the servos
-# have no positional feedback — derivative and integral terms would amplify
-# noise without improving tracking.
-DEADZONE_TILT = 30        # pixels of error ignored to prevent micro-jitter
-DEADZONE_PAN  = 30        # pixels of error ignored to prevent micro-jitter
-Kp_EYE        = 0.12      # proportional gain — higher = more responsive but shakier
-MIN_STEP_EYE  = 0.002     # minimum movement per frame (filters out sensor noise)
-MAX_STEP_EYE  = 0.08      # maximum movement per frame (caps speed to avoid overshoot)
+# have no positional feedback.
+DEADZONE_TILT = 30        # Pixels of error ignored to prevent micro-jitter
+DEADZONE_PAN  = 30        # Pixels of error ignored to prevent micro-jitter
+Kp_EYE        = 0.12      # Proportional gain: higher = more responsive but shakier
+MIN_STEP_EYE  = 0.002     # Minimum movement per frame (filters out noise)
+MAX_STEP_EYE  = 0.08      # Maximum movement per frame (caps speed to avoid overshooting)
 
-# Neck tracking gains — slower than eyes for natural head-follows-eyes look.
+# Neck tracking gains: slower than eyes for natural head-follows-eyes look.
 NECK_DEADZONE = 20
 Kp_NECK       = 0.05
 MIN_STEP_NECK = 1
@@ -255,7 +252,7 @@ INACTIVE_RETURN_SPEED = 0.04
 
 # How long to hold the active camera target before re-evaluating.
 # Prevents rapid switching between left/right camera when a face is
-# visible in both — keeps tracking smooth.
+# visible in both and keeps tracking smooth.
 TARGET_HOLD_TIME = 1.0
 
 
@@ -265,18 +262,18 @@ TARGET_HOLD_TIME = 1.0
 #
 # Each emotion has parameters controlling three animation subsystems:
 #
-#   Wings:   w_target   — how far wings open (0=closed, 1=full)
-#            w_raise    — speed of raising per frame
-#            w_lower    — speed of lowering per frame
-#            w_hold     — (min, max) seconds held at top
-#            w_wait     — (min, max) seconds between wing cycles
-#            w_flutters — number of up-down cycles per movement
+#   Wings:   w_target   : how far wings open (0=closed, 1=full)
+#            w_raise    : speed of raising per frame
+#            w_lower    : speed of lowering per frame
+#            w_hold     : (min, max) seconds held at top
+#            w_wait     : (min, max) seconds between wing cycles
+#            w_flutters : number of up-down cycles per movement
 #
-#   Eyelids: e_rest     — resting openness (0=wide open, 1=closed)
-#            e_speed    — blink speed multiplier
-#            e_hold     — seconds eyes stay shut during blink
+#   Eyelids: e_rest     : resting openness (0=wide open, 1=closed)
+#            e_speed    : blink speed multiplier
+#            e_hold     : seconds eyes stay shut during blink
 #
-#   Tilt:    tilt_limit — max vertical tracking range (0-1),
+#   Tilt:    tilt_limit : max vertical tracking range (0-1),
 #                         e.g. angry=0 means no vertical tracking (glaring)
 
 EMOTION_PARAMS = {
@@ -293,14 +290,10 @@ EMOTION_PARAMS = {
 # ── Emotion detection timing ─────────────────────────────────────────────────
 EMOTION_INTERVAL    = 0.5   # seconds between inference runs (keeps CPU load manageable)
 EMOTION_HISTORY     = 2     # recent predictions kept for majority voting
-EMOTION_STABLE_TIME = 1.0   # seconds an emotion must persist to become "stable" —
-                             # prevents reacting to noisy single-frame predictions
-EMOTION_MIN_CONF    = 50.0  # minimum confidence (%) to accept an emotion prediction —
-                             # low-confidence guesses are discarded before voting
-MIN_FACE_PX         = 60    # minimum face crop size in pixels (smaller crops are too
-                             # noisy for reliable emotion inference)
-FACE_PAD            = 0.20  # padding around face bounding box — gives the model
-                             # surrounding context which improves prediction quality
+EMOTION_STABLE_TIME = 1.0   # seconds an emotion must persist to become "stable" which prevents reacting to noisy single-frame predictions
+EMOTION_MIN_CONF    = 50.0  # minimum confidence (%) to accept an emotion prediction: low-confidence guesses are discarded before voting
+MIN_FACE_PX         = 60    # minimum face crop size in pixels (smaller crops are too noisy for reliable emotion inference)
+FACE_PAD            = 0.20  # padding around face bounding box: gives the model surrounding context which improves prediction quality
 
 
 # =============================================================================
@@ -577,9 +570,7 @@ audio_listener_paused = False
 audio_listener_lock   = threading.Lock()
 
 # ── Speech cancellation ─────────────────────────────────────────────────────
-# A generation counter: each new speech request increments this, and any
-# in-flight playback checks its own generation against the current value
-# to know if it has been superseded (e.g. by a wake-word interrupt).
+# A generation counter, more or less a fallback
 speech_generation  = 0
 speech_cancel_lock = threading.Lock()
 
@@ -608,14 +599,14 @@ parrot_transcript_lock  = threading.Lock()
 # These are normalised to -1..+1 and converted to servo ticks each frame.
 l_pan_norm      = 0.0
 r_pan_norm      = 0.0
-world_tilt_norm = 0.0   # shared vertical — both eyes tilt together
+world_tilt_norm = 0.0   # shared vertical: both eyes tilt together
 
 # ── Active target selection ──────────────────────────────────────────────────
 active_eye            = None
 active_eye_lock_until = 0.0
 
 # ── Last tracked face position per camera ────────────────────────────────────
-# Used for spatial continuity — when multiple faces are detected, prefer the
+# Used for spatial continuity: when multiple faces are detected, prefer the
 # one closest to where we were already looking.  Prevents jumping between
 # similarly-sized faces frame-to-frame.
 # Stored as (normalised_x, normalised_y) in 0..1 range, or None if no face.
@@ -655,8 +646,7 @@ wing_target     = 0.0
 flutter_count   = 0
 
 # ── Face-lost hold ──────────────────────────────────────────────────────────
-# When a face disappears briefly (e.g. during a blink, which physically
-# covers the cameras), Freddy holds his last tracked position instead of
+# When a face disappears briefly, Freddy holds his last tracked position instead of
 # immediately drifting back to centre.  Scanning only begins after the face
 # has been absent for FACE_LOST_HOLD_TIME seconds.
 FACE_LOST_HOLD_TIME = 5.0
@@ -664,7 +654,7 @@ face_last_seen_time = 0.0
 
 # ── No-face scanning state machine ──────────────────────────────────────────
 # When no face is detected for a while, Freddy pans his neck left and right
-# to "look around" for people — gives him lifelike idle behaviour.
+# to "look around" for people: gives him lifelike idle behaviour.
 SCAN_IDLE      = 0
 SCAN_LEFT      = 1
 SCAN_RIGHT     = 2
@@ -688,7 +678,7 @@ stable_emotion_since = time.time()
 last_seen_emotion    = "neutral"
 
 # ── Phrase timing ────────────────────────────────────────────────────────────
-# Phrases cycle in order (not random) so Freddy doesn't repeat himself.
+# Phrases cycle in order so Freddy doesn't repeat himself.
 emotion_phrase_index = {
     "happy": 0, "angry": 0, "sad": 0, "surprise": 0,
     "fear": 0, "disgust": 0, "neutral": 0,
@@ -716,8 +706,7 @@ speaking_emotion_lock = threading.Lock()
 #  SECTION 10: TESTING CSV LOGGING
 # =============================================================================
 
-# When LOGGING_ENABLED is True, per-frame data is written to CSV files for
-# post-hoc evaluation (tracking error, emotion accuracy, latency, etc.).
+# When LOGGING_ENABLED is True, per-frame data is written to CSV files for evaluation
 
 tracking_log   = None
 emotion_log    = None
@@ -827,7 +816,7 @@ def log_emotion(raw_label, confidence, voted, stable, latency_ms):
 
 
 def log_wake_word(event, detail=""):
-    """Write a wake-word event (detection, false positive, etc.) to the CSV."""
+    """Write a wake-word event to the CSV."""
     if not LOGGING_ENABLED or wake_word_log is None:
         return
     writer = csv.writer(wake_word_log)
@@ -873,7 +862,7 @@ servo_lock = threading.Lock()
 def set_servo_ticks(ch, ticks):
     """Send a pulse width (in PCA9685 ticks) to a servo channel.
     Clamps to the valid 12-bit range [0, 4095].
-    Protected by servo_lock to prevent I2C collisions between the main
+    Protected by servo_lock to prevent I2C race conditions between the main
     loop (eyes, neck, wings) and background speech threads (beak)."""
     ticks = int(max(0, min(4095, ticks)))
     with servo_lock:
@@ -965,7 +954,7 @@ def pick_best_detection(detections, last_pos=None):
 
     When only one face is detected, returns it directly.  When multiple
     faces are present, prefers the one closest to the last tracked position
-    (spatial continuity) — unless another face is significantly larger
+    (spatial continuity) unless another face is significantly larger
     (FACE_STEAL_THRESHOLD bigger), which indicates someone has moved much
     closer and should take priority.
 
@@ -1036,7 +1025,7 @@ def bbox_area_from_det(det):
 def process_eye_frame(frame, label):
     """Run MediaPipe face detection on a single camera frame.
 
-    Despite Picamera2 being configured with 'RGB888', testing showed that
+    Despite Picamera2 being configured with 'RGB888', it was found that
     capture_array() returns BGR-ordered data on this hardware.  The explicit
     conversion to RGB is required for MediaPipe to detect faces reliably.
 
@@ -1115,7 +1104,7 @@ def crop_face(frame, bbox, h, w, pad=FACE_PAD):
 def update_tracking(target, apply_tilt_limit=True):
     """Update eye pan/tilt and neck position from a face detection target.
 
-    This is the core tracking controller, used identically in robot mode,
+    This is the core tracking controller, used identically in Robot Mode,
     parrot-transcription animation, and parrot-speech animation. 
 
     Args:
@@ -1243,7 +1232,6 @@ def update_wings(now, params=None):
 
     In robot mode, params provides emotion-specific wing behaviour.
     In parrot mode (params=None), uses gentle default flutter values.
-    This replaces the three near-identical copies of wing logic.
 
     Args:
         now:    current time.time() value.
@@ -1320,8 +1308,8 @@ def draw_eye_debug(img, result, is_active=False):
 
 def normalize_emotion_label(label):
     """Map HSEmotion's raw output labels to Freddy's standard emotion names.
-    HSEmotion uses 'happiness', 'sadness', 'anger' etc. — this normalises
-    them to shorter consistent labels used throughout the codebase."""
+    HSEmotion uses 'happiness', 'sadness', 'anger' etc. so this normalises
+    them to shorter consistent labels used throughout the code."""
     mapping = {
         "happiness": "happy", "sadness": "sad", "anger": "angry",
         "surprise": "surprise", "fear": "fear", "disgust": "disgust",
@@ -1340,10 +1328,6 @@ def run_emotion(face_crop_bgr):
       3. Recent predictions are majority-voted to smooth frame-to-frame noise.
       4. The voted emotion must persist for EMOTION_STABLE_TIME seconds
          before it becomes the "stable" emotion that drives behaviour.
-
-    This multi-stage pipeline (thresholding → voting → temporal persistence)
-    ensures Freddy reacts to genuine emotional expressions, not transient
-    detector noise.
     """
     global current_emotion, current_emotion_conf, emotion_busy
     global stable_emotion, stable_emotion_since, last_seen_emotion
@@ -1359,7 +1343,7 @@ def run_emotion(face_crop_bgr):
         with emotion_lock:
             # Only accept predictions above the confidence threshold.
             # This prevents low-confidence guesses from polluting the
-            # majority vote and causing erratic behaviour changes.
+            # majority vote and causing strange behaviour changes.
             if emotion != "unknown" and conf >= EMOTION_MIN_CONF:
                 emotion_history.append(emotion)
                 current_emotion = Counter(emotion_history).most_common(1)[0][0]
@@ -1434,8 +1418,8 @@ def choose_blink_type():
     Different emotions produce different blink patterns:
       - Happy: frequent double-blinks (cheerful)
       - Angry: only normal blinks (tense)
-      - Surprise: normal blinks (wide-eyed look comes from e_rest=0)
-      - Sad: normal blinks (droopy look comes from e_rest=0.5)
+      - Surprise: normal blinks (wide-eyed look)
+      - Sad: normal blinks (droopy look)
       - Fear: frequent double-blinks (nervous)
       - Disgust: double-blinks (expressive)
 
@@ -1496,7 +1480,7 @@ def cancel_all_speech():
 
 def speech_generation_snapshot():
     """Capture the current speech generation counter.
-    Used by speech threads to detect if they've been superseded."""
+    Used by speech threads to detect if they've been replaced."""
     with speech_cancel_lock:
         return speech_generation
 
@@ -1675,7 +1659,7 @@ def speak_with_beak(text, expected_gen=None):
         print("TTS WAV not generated.")
         return
 
-    # Check again after TTS generation — a cancel during Piper should
+    # Check again after TTS generation: a cancel during Piper should
     # prevent the generated audio from being played.
     if not speech_is_current(expected_gen):
         return
@@ -1782,7 +1766,7 @@ def transcribe_whisper(filename):
     """Run whisper.cpp CLI to transcribe (and translate to English) a WAV file.
 
     The --translate flag causes Whisper to output English text regardless of
-    the input language.  Only timestamped output lines are parsed — Whisper
+    the input language.  Only timestamped output lines are parsed so Whisper
     metadata lines are discarded.
 
     Returns the transcript string (empty string on failure)."""
@@ -1907,7 +1891,7 @@ def audio_listener():
     All microphone reads go through audio_stream_lock to prevent contention
     with record_command() and flush_audio_buffer().
 
-    Resilient to transient audio errors — logs the error and continues
+    Resilient to transient audio errors: logs the error and continues
     rather than permanently killing wake-word detection.
     """
     global wake_detected, audio_listener_paused
@@ -1961,7 +1945,7 @@ print("Wake word listener started.")
 #  SECTION 21: LOAD EMOTION MODEL
 # =============================================================================
 
-# HSEmotion with EfficientNet-B0 backbone, trained on AffectNet.
+# HSEmotion with EfficientNet-B0, trained on AffectNet.
 # The 'enet_b0_8_best_afew' variant was chosen because it supports 8 emotion
 # classes and runs efficiently on the Raspberry Pi 5 (~150-300 ms per inference).
 print("Loading emotion model...")
@@ -2054,7 +2038,7 @@ try:
             flush_audio_buffer(4)
             wav_path = record_command()
 
-            # Start transcription in background — the thread sets the event
+            # Start transcription in background: the thread sets the event
             # directly when done, so no extra polling thread is needed.
             with parrot_transcript_lock:
                 parrot_transcript       = None
